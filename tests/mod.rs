@@ -1,15 +1,12 @@
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddrV4},
-    str::FromStr,
-};
+use std::net::{IpAddr, Ipv4Addr, SocketAddrV4};
+use std::str::FromStr;
 
 use tokio::net::UdpSocket;
+use trust_dns_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
+use trust_dns_resolver::proto::rr::LowerName;
+use trust_dns_resolver::AsyncResolver;
+
 use trust_dns_mock_server::Server;
-use trust_dns_resolver::{
-    config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts},
-    proto::rr::LowerName,
-    AsyncResolver,
-};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

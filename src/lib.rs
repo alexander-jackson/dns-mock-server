@@ -1,18 +1,14 @@
-use std::{collections::HashMap, net::IpAddr};
+use std::collections::HashMap;
+use std::net::IpAddr;
 
 use async_trait::async_trait;
 use tokio::net::UdpSocket;
-use trust_dns_server::proto::{
-    op::Header,
-    rr::{
-        rdata::{A, AAAA},
-        LowerName, RData, Record,
-    },
-};
-use trust_dns_server::{
-    authority::MessageResponseBuilder,
-    server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
-    ServerFuture,
+use trust_dns_server::authority::MessageResponseBuilder;
+use trust_dns_server::proto::op::Header;
+use trust_dns_server::proto::rr::rdata::{A, AAAA};
+use trust_dns_server::proto::rr::{LowerName, RData, Record};
+use trust_dns_server::server::{
+    Request, RequestHandler, ResponseHandler, ResponseInfo, ServerFuture,
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
