@@ -1,9 +1,7 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddrV4};
-use std::str::FromStr;
 
 use tokio::net::UdpSocket;
 use trust_dns_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
-use trust_dns_resolver::proto::rr::LowerName;
 use trust_dns_resolver::AsyncResolver;
 
 use trust_dns_mock_server::Server;
@@ -15,10 +13,7 @@ async fn can_query_dns_records_from_the_server() -> Result<()> {
     let expected_addr = IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4));
 
     let mut server = Server::default();
-    server.add_records(
-        LowerName::from_str("www.example.com.")?,
-        vec![expected_addr],
-    );
+    server.add_records("www.example.com.", vec![expected_addr])?;
 
     let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
     let socket = UdpSocket::bind(&addr).await?;

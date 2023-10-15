@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::str::FromStr;
 
 use async_trait::async_trait;
 use tokio::net::UdpSocket;
@@ -19,8 +20,12 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn add_records(&mut self, name: LowerName, records: Vec<IpAddr>) {
+    pub fn add_records(&mut self, name: &str, records: Vec<IpAddr>) -> Result<()> {
+        let name = LowerName::from_str(name)?;
+
         self.store.insert(name, records);
+
+        Ok(())
     }
 
     pub async fn start(self, socket: UdpSocket) -> Result<()> {
