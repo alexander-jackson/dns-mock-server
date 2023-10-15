@@ -1,4 +1,4 @@
-use std::net::IpAddr;
+use std::{collections::HashMap, net::IpAddr};
 
 use async_trait::async_trait;
 use tokio::net::UdpSocket;
@@ -6,7 +6,7 @@ use trust_dns_server::proto::{
     op::Header,
     rr::{
         rdata::{A, AAAA},
-        RData, Record,
+        LowerName, RData, Record,
     },
 };
 use trust_dns_server::{
@@ -17,9 +17,16 @@ use trust_dns_server::{
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-pub struct Server;
+#[derive(Clone, Debug, Default)]
+pub struct Server {
+    store: HashMap<LowerName, Vec<IpAddr>>,
+}
 
 impl Server {
+    pub fn add_records(&mut self, name: LowerName, records: Vec<IpAddr>) {
+        self.store.insert(name, records);
+    }
+
     pub async fn start(self, socket: UdpSocket) -> Result<()> {
         let mut server = ServerFuture::new(self);
 
@@ -42,14 +49,31 @@ impl RequestHandler for Server {
         let mut header = Header::response_from_request(request.header());
         header.set_authoritative(true);
 
-        let rdata = match request.src().ip() {
-            IpAddr::V4(ipv4) => RData::A(A::from(ipv4)),
-            IpAddr::V6(ipv6) => RData::AAAA(AAAA::from(ipv6)),
-        };
+        let name = request.query().name();
 
-        let records = vec![Record::from_rdata(request.query().name().into(), 60, rdata)];
-        let response = builder.build(header, records.iter(), &[], &[], &[]);
+        if let Some(entries) = self.store.get(name) {
+            let records: Vec<_> = entries
+                .iter()
+                .map(|entry| match entry {
+                    IpAddr::V4(ipv4) => RData::A(A::from(*ipv4)),
+                    IpAddr::V6(ipv6) => RData::AAAA(AAAA::from(*ipv6)),
+                })
+                .map(|rdata| Record::from_rdata(name.into(), 60, rdata))
+                .collect();
 
-        response_handler.send_response(response).await.unwrap()
+            let response = builder.build(header, records.iter(), &[], &[], &[]);
+
+            response_handler.send_response(response).await.unwrap()
+        } else {
+            let rdata = match request.src().ip() {
+                IpAddr::V4(ipv4) => RData::A(A::from(ipv4)),
+                IpAddr::V6(ipv6) => RData::AAAA(AAAA::from(ipv6)),
+            };
+
+            let records = vec![Record::from_rdata(request.query().name().into(), 60, rdata)];
+            let response = builder.build(header, records.iter(), &[], &[], &[]);
+
+            response_handler.send_response(response).await.unwrap()
+        }
     }
 }
