@@ -5,6 +5,8 @@ use trust_dns_resolver::config::{NameServerConfig, Protocol, ResolverConfig, Res
 use trust_dns_resolver::AsyncResolver;
 
 use trust_dns_mock_server::Server;
+use trust_dns_resolver::error::ResolveErrorKind;
+use trust_dns_resolver::proto::op::ResponseCode;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -40,7 +42,7 @@ async fn can_query_dns_records_from_the_server() -> Result<()> {
 }
 
 #[tokio::test]
-async fn unknown_names_return_requester_ip() -> Result<()> {
+async fn unknown_names_return_errors() -> Result<()> {
     let server = Server::default();
 
     let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
@@ -57,12 +59,16 @@ async fn unknown_names_return_requester_ip() -> Result<()> {
     config.add_name_server(nameserver_config);
 
     let resolver = AsyncResolver::tokio(config, ResolverOpts::default());
-    let result = resolver.lookup_ip("www.example.com.").await?;
 
-    let addrs: Vec<_> = result.into_iter().collect();
+    let Err(err) = resolver.lookup_ip("www.example.com.").await else {
+        return Err("got successful response back".into());
+    };
 
-    assert_eq!(addrs.len(), 1);
-    assert_eq!(addrs[0], IpAddr::V4(Ipv4Addr::LOCALHOST));
+    let ResolveErrorKind::NoRecordsFound { response_code, .. } = err.kind() else {
+        return Err("got unexpected error kind back".into());
+    };
+
+    assert_eq!(*response_code, ResponseCode::ServFail);
 
     Ok(())
 }

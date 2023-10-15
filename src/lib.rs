@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use tokio::net::UdpSocket;
 use trust_dns_server::authority::MessageResponseBuilder;
 use trust_dns_server::proto::op::Header;
+use trust_dns_server::proto::op::ResponseCode;
 use trust_dns_server::proto::rr::rdata::{A, AAAA};
 use trust_dns_server::proto::rr::{LowerName, RData, Record};
 use trust_dns_server::server::{
@@ -63,17 +64,11 @@ impl RequestHandler for Server {
                 .collect();
 
             let response = builder.build(header, records.iter(), &[], &[], &[]);
-
             response_handler.send_response(response).await.unwrap()
         } else {
-            let rdata = match request.src().ip() {
-                IpAddr::V4(ipv4) => RData::A(A::from(ipv4)),
-                IpAddr::V6(ipv6) => RData::AAAA(AAAA::from(ipv6)),
-            };
+            header.set_response_code(ResponseCode::ServFail);
 
-            let records = vec![Record::from_rdata(request.query().name().into(), 60, rdata)];
-            let response = builder.build(header, records.iter(), &[], &[], &[]);
-
+            let response = builder.build_no_records(header);
             response_handler.send_response(response).await.unwrap()
         }
     }
