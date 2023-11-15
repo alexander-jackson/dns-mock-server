@@ -1,10 +1,16 @@
+//! Implementation of a DNS server intended for use in tests.
+//!
+//! This allows you to run a proper DNS server while setting up records to be mapped to specific IP
+//! addresses. Your test code can then target the locally bound server and make normal DNS
+//! requests.
+
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use tokio::net::UdpSocket;
 use hickory_server::authority::MessageResponseBuilder;
+use hickory_server::proto::error::ProtoError;
 use hickory_server::proto::op::Header;
 use hickory_server::proto::op::ResponseCode;
 use hickory_server::proto::rr::rdata::{A, AAAA};
@@ -12,16 +18,32 @@ use hickory_server::proto::rr::{LowerName, RData, Record};
 use hickory_server::server::{
     Request, RequestHandler, ResponseHandler, ResponseInfo, ServerFuture,
 };
+use tokio::net::UdpSocket;
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
+/// A simple mock server for DNS requests.
+///
+/// The intended usage is to create a new instance using [`Server::default()`] and add some record
+/// mappings to it. You can then bind a [`UdpSocket`] and start the server with [`Server::start()`]
+/// in a background task before making requests on the main thread.
 #[derive(Clone, Debug, Default)]
 pub struct Server {
     store: HashMap<LowerName, Vec<IpAddr>>,
 }
 
 impl Server {
-    pub fn add_records(&mut self, name: &str, records: Vec<IpAddr>) -> Result<()> {
+    /// Adds a mapping from a DNS record to some IP addresses.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use std::net::{IpAddr, Ipv4Addr};
+    /// # use dns_mock_server::Server;
+    /// let mut server = Server::default();
+    /// let records = vec![IpAddr::V4(Ipv4Addr::LOCALHOST)];
+    ///
+    /// server.add_records("example.com", records).expect("Invalid hostname");
+    /// ```
+    pub fn add_records(&mut self, name: &str, records: Vec<IpAddr>) -> Result<(), ProtoError> {
         let name = LowerName::from_str(name)?;
 
         self.store.insert(name, records);
@@ -29,7 +51,10 @@ impl Server {
         Ok(())
     }
 
-    pub async fn start(self, socket: UdpSocket) -> Result<()> {
+    /// Starts the mock server on the given [`UdpSocket`].
+    ///
+    /// This should be run in a background task using a method such as [`tokio::spawn`].
+    pub async fn start(self, socket: UdpSocket) -> Result<(), ProtoError> {
         let mut server = ServerFuture::new(self);
 
         server.register_socket(socket);
