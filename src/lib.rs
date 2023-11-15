@@ -4,12 +4,12 @@ use std::str::FromStr;
 
 use async_trait::async_trait;
 use tokio::net::UdpSocket;
-use trust_dns_server::authority::MessageResponseBuilder;
-use trust_dns_server::proto::op::Header;
-use trust_dns_server::proto::op::ResponseCode;
-use trust_dns_server::proto::rr::rdata::{A, AAAA};
-use trust_dns_server::proto::rr::{LowerName, RData, Record};
-use trust_dns_server::server::{
+use hickory_server::authority::MessageResponseBuilder;
+use hickory_server::proto::op::Header;
+use hickory_server::proto::op::ResponseCode;
+use hickory_server::proto::rr::rdata::{A, AAAA};
+use hickory_server::proto::rr::{LowerName, RData, Record};
+use hickory_server::server::{
     Request, RequestHandler, ResponseHandler, ResponseInfo, ServerFuture,
 };
 

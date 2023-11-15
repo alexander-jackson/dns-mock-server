@@ -1,12 +1,12 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddrV4};
 
+use hickory_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
+use hickory_resolver::error::ResolveErrorKind;
+use hickory_resolver::proto::op::ResponseCode;
+use hickory_resolver::AsyncResolver;
 use tokio::net::UdpSocket;
-use trust_dns_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
-use trust_dns_resolver::AsyncResolver;
 
-use trust_dns_mock_server::Server;
-use trust_dns_resolver::error::ResolveErrorKind;
-use trust_dns_resolver::proto::op::ResponseCode;
+use dns_mock_server::Server;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
