@@ -1,9 +1,12 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddrV4};
 
-use hickory_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
-use hickory_resolver::error::ResolveErrorKind;
+use hickory_proto::xfer::Protocol;
+use hickory_resolver::config::{NameServerConfig, ResolverConfig};
+use hickory_resolver::name_server::TokioConnectionProvider;
 use hickory_resolver::proto::op::ResponseCode;
-use hickory_resolver::AsyncResolver;
+use hickory_resolver::ResolveErrorKind;
+use hickory_resolver::Resolver;
+use hickory_server::proto::ProtoErrorKind;
 use tokio::net::UdpSocket;
 
 use dns_mock_server::Server;
@@ -30,7 +33,8 @@ async fn can_query_dns_records_from_the_server() -> Result<()> {
     let nameserver_config = NameServerConfig::new(local_addr, Protocol::Udp);
     config.add_name_server(nameserver_config);
 
-    let resolver = AsyncResolver::tokio(config, ResolverOpts::default());
+    let resolver =
+        Resolver::builder_with_config(config, TokioConnectionProvider::default()).build();
     let result = resolver.lookup_ip("www.example.com.").await?;
 
     let addrs: Vec<_> = result.into_iter().collect();
@@ -58,14 +62,19 @@ async fn unknown_names_return_errors() -> Result<()> {
     let nameserver_config = NameServerConfig::new(local_addr, Protocol::Udp);
     config.add_name_server(nameserver_config);
 
-    let resolver = AsyncResolver::tokio(config, ResolverOpts::default());
+    let resolver =
+        Resolver::builder_with_config(config, TokioConnectionProvider::default()).build();
 
     let Err(err) = resolver.lookup_ip("www.example.com.").await else {
         return Err("got successful response back".into());
     };
 
-    let ResolveErrorKind::NoRecordsFound { response_code, .. } = err.kind() else {
+    let ResolveErrorKind::Proto(proto_error) = err.kind() else {
         return Err("got unexpected error kind back".into());
+    };
+
+    let ProtoErrorKind::NoRecordsFound { response_code, .. } = proto_error.kind() else {
+        return Err("got unexpected proto error kind back".into());
     };
 
     assert_eq!(*response_code, ResponseCode::ServFail);

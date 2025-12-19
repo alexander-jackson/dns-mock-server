@@ -9,12 +9,13 @@ use std::net::IpAddr;
 use std::str::FromStr;
 
 use async_trait::async_trait;
+use hickory_proto::rr::LowerName;
+use hickory_proto::ProtoError;
 use hickory_server::authority::MessageResponseBuilder;
-use hickory_server::proto::error::ProtoError;
 use hickory_server::proto::op::Header;
 use hickory_server::proto::op::ResponseCode;
 use hickory_server::proto::rr::rdata::{A, AAAA};
-use hickory_server::proto::rr::{LowerName, RData, Record};
+use hickory_server::proto::rr::{RData, Record};
 use hickory_server::server::{
     Request, RequestHandler, ResponseHandler, ResponseInfo, ServerFuture,
 };
@@ -76,7 +77,7 @@ impl RequestHandler for Server {
         let mut header = Header::response_from_request(request.header());
         header.set_authoritative(true);
 
-        let name = request.query().name();
+        let name = request.queries()[0].name();
 
         if let Some(entries) = self.store.get(name) {
             let records: Vec<_> = entries
