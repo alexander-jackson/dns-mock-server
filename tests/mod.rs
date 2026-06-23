@@ -1,12 +1,10 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddrV4};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 
-use hickory_proto::xfer::Protocol;
-use hickory_resolver::config::{NameServerConfig, ResolverConfig};
-use hickory_resolver::name_server::TokioConnectionProvider;
+use hickory_resolver::config::{ConnectionConfig, NameServerConfig, ResolverConfig};
 use hickory_resolver::proto::op::ResponseCode;
-use hickory_resolver::ResolveErrorKind;
 use hickory_resolver::Resolver;
-use hickory_server::proto::ProtoErrorKind;
+use hickory_server::net::runtime::TokioRuntimeProvider;
+use hickory_server::net::{DnsError, NetError};
 use tokio::net::UdpSocket;
 
 use dns_mock_server::Server;
@@ -29,15 +27,10 @@ async fn can_query_dns_records_from_the_server() -> Result<()> {
         server.start(socket).await.unwrap();
     });
 
-    let mut config = ResolverConfig::new();
-    let nameserver_config = NameServerConfig::new(local_addr, Protocol::Udp);
-    config.add_name_server(nameserver_config);
+    let resolver = get_resolver(local_addr)?;
 
-    let resolver =
-        Resolver::builder_with_config(config, TokioConnectionProvider::default()).build();
     let result = resolver.lookup_ip("www.example.com.").await?;
-
-    let addrs: Vec<_> = result.into_iter().collect();
+    let addrs: Vec<_> = result.iter().collect();
 
     assert_eq!(addrs.len(), 1);
     assert_eq!(addrs[0], expected_addr);
@@ -58,26 +51,40 @@ async fn unknown_names_return_errors() -> Result<()> {
         server.start(socket).await.unwrap();
     });
 
-    let mut config = ResolverConfig::new();
-    let nameserver_config = NameServerConfig::new(local_addr, Protocol::Udp);
-    config.add_name_server(nameserver_config);
-
-    let resolver =
-        Resolver::builder_with_config(config, TokioConnectionProvider::default()).build();
+    let resolver = get_resolver(local_addr)?;
 
     let Err(err) = resolver.lookup_ip("www.example.com.").await else {
         return Err("got successful response back".into());
     };
 
-    let ResolveErrorKind::Proto(proto_error) = err.kind() else {
+    let NetError::Dns(error) = err else {
+        return Err("got unexpected error back".into());
+    };
+
+    let DnsError::NoRecordsFound(no_records) = error else {
         return Err("got unexpected error kind back".into());
     };
 
-    let ProtoErrorKind::NoRecordsFound { response_code, .. } = proto_error.kind() else {
-        return Err("got unexpected proto error kind back".into());
-    };
-
-    assert_eq!(*response_code, ResponseCode::ServFail);
+    assert_eq!(no_records.response_code, ResponseCode::NoError);
 
     Ok(())
+}
+
+fn get_resolver(addr: SocketAddr) -> Result<Resolver<TokioRuntimeProvider>> {
+    let mut config = ResolverConfig::default();
+
+    let connection_config = {
+        let mut cfg = ConnectionConfig::udp();
+        cfg.port = addr.port();
+
+        cfg
+    };
+
+    let nameserver_config = NameServerConfig::new(addr.ip(), true, vec![connection_config]);
+    config.add_name_server(nameserver_config);
+
+    let provider = TokioRuntimeProvider::default();
+    let resolver = Resolver::builder_with_config(config, provider).build()?;
+
+    Ok(resolver)
 }

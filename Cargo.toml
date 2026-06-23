@@ -1,7 +1,7 @@
 [package]
 name = "dns-mock-server"
-version = "0.1.7"
-edition = "2021"
+version = "0.2.0"
+edition = "2024"
 description = "Mock DNS server for tests"
 license = "MIT OR Apache-2.0"
 keywords = ["dns", "mock", "test"]
@@ -10,10 +10,10 @@ repository = "https://github.com/alexander-jackson/dns-mock-server"
 
 [dependencies]
 async-trait = "0.1.89"
-tokio = { version = "1.49.0", features = ["net"] }
-hickory-server = "0.25.2"
-hickory-proto = "0.25.2"
+tokio = { version = "1.52.3", features = ["net"] }
+hickory-server = "0.26.1"
+hickory-proto = "0.26.1"
 
 [dev-dependencies]
-tokio = { version = "1.49.0", features = ["macros", "rt"] }
-hickory-resolver = "0.25.2"
+tokio = { version = "1.52.3", features = ["macros", "rt"] }
+hickory-resolver = "0.26.1"

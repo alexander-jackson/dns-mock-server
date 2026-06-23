@@ -9,16 +9,17 @@ use std::net::IpAddr;
 use std::str::FromStr;
 
 use async_trait::async_trait;
+use hickory_proto::op::Metadata;
 use hickory_proto::rr::LowerName;
 use hickory_proto::ProtoError;
-use hickory_server::authority::MessageResponseBuilder;
-use hickory_server::proto::op::Header;
-use hickory_server::proto::op::ResponseCode;
+use hickory_server::net::runtime::Time;
+use hickory_server::net::NetError;
 use hickory_server::proto::rr::rdata::{A, AAAA};
 use hickory_server::proto::rr::{RData, Record};
 use hickory_server::server::{
-    Request, RequestHandler, ResponseHandler, ResponseInfo, ServerFuture,
+    Request, RequestHandler, ResponseHandler, ResponseInfo, Server as HickoryServer,
 };
+use hickory_server::zone_handler::MessageResponseBuilder;
 use tokio::net::UdpSocket;
 
 /// A simple mock server for DNS requests.
@@ -55,8 +56,8 @@ impl Server {
     /// Starts the mock server on the given [`UdpSocket`].
     ///
     /// This should be run in a background task using a method such as [`tokio::spawn`].
-    pub async fn start(self, socket: UdpSocket) -> Result<(), ProtoError> {
-        let mut server = ServerFuture::new(self);
+    pub async fn start(self, socket: UdpSocket) -> Result<(), NetError> {
+        let mut server = HickoryServer::new(self);
 
         server.register_socket(socket);
         server.block_until_done().await?;
@@ -67,17 +68,17 @@ impl Server {
 
 #[async_trait]
 impl RequestHandler for Server {
-    async fn handle_request<R: ResponseHandler>(
+    async fn handle_request<R: ResponseHandler, T: Time>(
         &self,
         request: &Request,
         mut response_handler: R,
     ) -> ResponseInfo {
         let builder = MessageResponseBuilder::from_message_request(request);
 
-        let mut header = Header::response_from_request(request.header());
-        header.set_authoritative(true);
+        let mut metadata = Metadata::response_from_request(&request.metadata);
+        metadata.authoritative = true;
 
-        let name = request.queries()[0].name();
+        let name = request.queries.queries()[0].name();
 
         if let Some(entries) = self.store.get(name) {
             let records: Vec<_> = entries
@@ -89,12 +90,10 @@ impl RequestHandler for Server {
                 .map(|rdata| Record::from_rdata(name.into(), 60, rdata))
                 .collect();
 
-            let response = builder.build(header, records.iter(), &[], &[], &[]);
+            let response = builder.build(metadata, records.iter(), &[], &[], &[]);
             response_handler.send_response(response).await.unwrap()
         } else {
-            header.set_response_code(ResponseCode::ServFail);
-
-            let response = builder.build_no_records(header);
+            let response = builder.build_no_records(metadata);
             response_handler.send_response(response).await.unwrap()
         }
     }
